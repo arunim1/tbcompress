@@ -9,6 +9,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -27,10 +28,45 @@ np.random.seed(42)
 random.seed(42)
 
 
-# Define a neural network for tablebase classification - smaller but deeper
+# Define an NNUE-inspired neural network for lightweight tablebase classification
+class OptimizedTablebaseClassifier(nn.Module):
+    def __init__(self, input_size=65, num_classes=3):
+        super(OptimizedTablebaseClassifier, self).__init__()
+
+        # Feature transformer (first layer) - inspired by NNUE architecture
+        self.feature_transformer = nn.Linear(input_size, 256)
+
+        # Use CELU activation for better properties than ReLU
+        # Alpha=0.5 provides a good balance between ReLU and ELU
+        self.activation = nn.CELU(alpha=0.5)
+
+        # Single compact hidden layer
+        self.hidden = nn.Linear(256, 32)
+
+        # Batch normalization for better training stability and faster convergence
+        self.batch_norm = nn.BatchNorm1d(32)
+
+        # Output layer
+        self.output = nn.Linear(32, num_classes)
+
+    def forward(self, x):
+        # Feature transformation
+        x = self.activation(self.feature_transformer(x))
+
+        # Hidden layer with batch normalization
+        x = self.batch_norm(self.activation(self.hidden(x)))
+
+        # Output layer
+        return self.output(x)
+
+
+# Legacy classifier for backward compatibility
 class TablebaseClassifier(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(TablebaseClassifier, self).__init__()
+        print(
+            "Warning: Using legacy TablebaseClassifier. Consider using OptimizedTablebaseClassifier instead."
+        )
         # Reduce hidden size to approximately 1/10th
         small_hidden = hidden_size // 10
 
@@ -56,9 +92,9 @@ class TablebaseClassifier(nn.Module):
         return self.layers(x)
 
 
-# Function to convert a chess position to feature vector
-def board_to_feature_vector(board):
-    """Convert a chess.Board to a feature vector for the neural network."""
+# Function to convert a chess position to feature vector - optimized for NNUE-inspired approach
+def optimized_board_to_feature_vector(board):
+    """Convert a chess.Board to a feature vector for the neural network using NNUE-inspired approach."""
     # Create a 64-element vector (one per square)
     # Empty square: 0
     # White pieces: 1 (pawn), 2 (knight), 3 (bishop), 4 (rook), 5 (queen), 6 (king)
@@ -74,6 +110,7 @@ def board_to_feature_vector(board):
         chess.KING: 6,
     }
 
+    # Sparse representation - only populate non-empty squares
     for square in chess.SQUARES:
         piece = board.piece_at(square)
         if piece is not None:
@@ -82,13 +119,18 @@ def board_to_feature_vector(board):
                 value = -value
             feature_vector[square] = value
 
-    # Extra features for side to move
-    # If white to move, add a 1 at the end, else add a -1
+    # Side to move
     side_to_move = 1.0 if board.turn == chess.WHITE else -1.0
 
     # Combine features
     combined_features = np.append(feature_vector, side_to_move)
     return combined_features
+
+
+# Legacy function for backward compatibility
+def board_to_feature_vector(board):
+    """Convert a chess.Board to a feature vector for the neural network."""
+    return optimized_board_to_feature_vector(board)
 
 
 # Real tablebase dataset
@@ -285,21 +327,125 @@ class SyzygyTablebaseDataset(Dataset):
         )
 
 
-# Training function
+# Optimized training function with mixed precision and learning rate scheduling
+def train_optimized_classifier(
+    model, train_loader, num_epochs=100, accuracy_threshold=0.95, learning_rate=0.001
+):
+    # Device selection
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA for GPU acceleration")
+        # Enable mixed precision training with CUDA
+        use_amp = True
+        scaler = torch.cuda.amp.GradScaler()
+    # elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+    #     # Check if MPS (Metal Performance Shaders) is available for Mac Silicon GPU acceleration
+    #     device = torch.device("mps")
+    #     print("Using MPS (Metal Performance Shaders) for Mac Silicon GPU acceleration")
+    #     use_amp = False  # MPS doesn't support AMP yet
+    else:
+        device = torch.device("cpu")
+        print("Using CPU for training")
+        use_amp = False
+
+    model.to(device)
+
+    # Use a more efficient optimizer
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+
+    # Use a learning rate scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, "min", patience=5, factor=0.5
+    )
+
+    # Use cross entropy loss
+    criterion = nn.CrossEntropyLoss()
+
+    training_history = {"train_loss": [], "train_acc": []}
+    best_train_acc = 0.0
+
+    for epoch in range(num_epochs):
+        # Training phase
+        model.train()
+        running_loss = 0.0
+        correct_train = 0
+        total_train = 0
+
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+
+            # Forward pass with mixed precision where available
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
+
+                # Backward pass with gradient scaling
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                # Standard forward and backward pass
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+            # Statistics
+            running_loss += loss.item() * inputs.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            total_train += labels.size(0)
+            correct_train += (predicted == labels).sum().item()
+
+        epoch_train_loss = running_loss / total_train
+        epoch_train_acc = correct_train / total_train
+        training_history["train_loss"].append(epoch_train_loss)
+        training_history["train_acc"].append(epoch_train_acc)
+
+        # Update learning rate based on loss
+        scheduler.step(epoch_train_loss)
+
+        print(f"Epoch {epoch+1}/{num_epochs}:")
+        print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
+        print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
+
+        # Save the best model
+        if epoch_train_acc > best_train_acc:
+            best_train_acc = epoch_train_acc
+            torch.save(model.state_dict(), "best_tablebase_model.pth")
+            print(f"Model saved with training accuracy: {best_train_acc:.4f}")
+
+        # Early stopping condition
+        if epoch_train_acc >= accuracy_threshold:
+            print(
+                f"Reached {accuracy_threshold*100:.1f}% accuracy at epoch {epoch+1}. Early stopping."
+            )
+            break
+
+    return training_history
+
+
+# Legacy training function for backward compatibility
 def train_tablebase_classifier(
     model, train_loader, criterion, optimizer, num_epochs=500, accuracy_threshold=0.95
 ):
+    print(
+        "Warning: Using legacy training function. Consider using train_optimized_classifier instead."
+    )
     # if cuda, use cuda
     if torch.cuda.is_available():
         device = torch.device("cuda")
         print("Using CUDA for GPU acceleration")
-    # elif torch.backends.mps.is_available():
-    #     # Check if MPS (Metal Performance Shaders) is available for Mac Silicon GPU acceleration
-    #     device = torch.device("mps")
-    #     print("Using MPS (Metal Performance Shaders) for Mac Silicon GPU acceleration")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        # Check if MPS (Metal Performance Shaders) is available for Mac Silicon GPU acceleration
+        device = torch.device("mps")
+        print("Using MPS (Metal Performance Shaders) for Mac Silicon GPU acceleration")
     else:
         device = torch.device("cpu")
-        print("MPS not available, falling back to CPU")
+        print("Using CPU for training")
 
     model.to(device)
 
@@ -346,23 +492,66 @@ def train_tablebase_classifier(
             best_train_acc = epoch_train_acc
             torch.save(model.state_dict(), "best_tablebase_model.pth")
             print(f"Model saved with training accuracy: {best_train_acc:.4f}")
-            
+
         # Early stopping condition: stop at 95% accuracy
         if epoch_train_acc >= accuracy_threshold:
-            print(f"Reached {accuracy_threshold*100:.1f}% accuracy at epoch {epoch+1}. Early stopping.")
+            print(
+                f"Reached {accuracy_threshold*100:.1f}% accuracy at epoch {epoch+1}. Early stopping."
+            )
             break
 
     return training_history
 
 
+# Export model for deployment
+def export_model(model, model_path="lightweight_tablebase_classifier"):
+    """Export the model to lightweight formats for deployment"""
+    # Save the PyTorch model
+    print("Saving PyTorch model...")
+    torch.save(model.state_dict(), f"{model_path}.pth")
+    print(f"Saved PyTorch model to {model_path}.pth")
+
+    # Convert to TorchScript for C++ deployment
+    try:
+        print("Converting to TorchScript...")
+        model.eval()  # Set to evaluation mode
+        example_input = torch.randn(1, 65)
+        scripted_model = torch.jit.script(model)
+        scripted_model.save(f"{model_path}.pt")
+        print(f"Saved TorchScript model to {model_path}.pt")
+    except Exception as e:
+        print(f"TorchScript export failed: {e}")
+
+    # Try to export to ONNX if available
+    try:
+        print("Exporting to ONNX format...")
+        model.eval()  # Ensure model is in eval mode
+        example_input = torch.randn(1, 65)
+        torch.onnx.export(
+            model,
+            example_input,
+            f"{model_path}.onnx",
+            export_params=True,
+            opset_version=12,
+            do_constant_folding=True,
+            input_names=["input"],
+            output_names=["output"],
+            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        )
+        print(f"Saved ONNX model to {model_path}.onnx")
+    except Exception as e:
+        print(f"ONNX export failed: {e}")
+
+    print("Model export complete!")
+
+
 def main():
     # Hyperparameters
     input_size = 65  # 64 squares + 1 for side to move
-    hidden_size = 256
     num_classes = 3  # Loss, Draw, Win
     batch_size = 64
     learning_rate = 0.001
-    num_epochs = 500
+    num_epochs = 100  # Reduced epochs as the optimized model converges faster
 
     # Path to tablebase directory
     tablebase_dir = "/Users/arunim/Documents/github/tbcompress/Syzygy345_WDL"
@@ -381,19 +570,16 @@ def main():
     # Create data loader
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    # Initialize the model
-    model = TablebaseClassifier(input_size, hidden_size, num_classes)
+    # Initialize the optimized model
+    model = OptimizedTablebaseClassifier(input_size, num_classes)
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    # Define loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-    # Train the model
-    print("Starting training...")
+    # Train the model with optimized training function
+    print("Starting training with optimized classifier...")
     start_time = time.time()
 
-    history = train_tablebase_classifier(
-        model, train_loader, criterion, optimizer, num_epochs
+    history = train_optimized_classifier(
+        model, train_loader, num_epochs=num_epochs, learning_rate=learning_rate
     )
 
     end_time = time.time()
@@ -402,6 +588,17 @@ def main():
         f"Training completed in {training_time:.2f} seconds ({training_time/60:.2f} minutes)!"
     )
     print(f"Final training accuracy: {max(history['train_acc']):.4f}")
+
+    # Export model for deployment
+    print("\nExporting model for deployment...")
+    export_model(model)
+
+    # Optional: Compare with legacy model
+    print("\nFor comparison, here's the parameter count of the legacy model:")
+    legacy_model = TablebaseClassifier(input_size, 256, num_classes)
+    print(
+        f"Legacy model parameters: {sum(p.numel() for p in legacy_model.parameters()):,}"
+    )
 
 
 if __name__ == "__main__":
