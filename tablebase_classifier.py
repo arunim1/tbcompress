@@ -27,20 +27,29 @@ np.random.seed(42)
 random.seed(42)
 
 
-# Define a neural network for tablebase classification
+# Define a neural network for tablebase classification - smaller but deeper
 class TablebaseClassifier(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(TablebaseClassifier, self).__init__()
+        # Reduce hidden size to approximately 1/10th
+        small_hidden = hidden_size // 10
+
         self.layers = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            nn.Linear(input_size, small_hidden),
             nn.ReLU(),
-            nn.Dropout(0.2),  # Add dropout for regularization
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(small_hidden, small_hidden),
             nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_size, hidden_size // 2),
+            nn.Dropout(0.15),
+            nn.Linear(small_hidden, small_hidden // 2),
             nn.ReLU(),
-            nn.Linear(hidden_size // 2, num_classes),
+            nn.Linear(small_hidden // 2, small_hidden // 2),
+            nn.ReLU(),
+            nn.Dropout(0.15),
+            nn.Linear(small_hidden // 2, small_hidden // 4),
+            nn.ReLU(),
+            nn.Linear(small_hidden // 4, small_hidden // 4),
+            nn.ReLU(),
+            nn.Linear(small_hidden // 4, num_classes),
         )
 
     def forward(self, x):
@@ -98,7 +107,8 @@ class SyzygyTablebaseDataset(Dataset):
 
         if cache_file and os.path.exists(cache_file):
             print(f"Loading cached tablebase data from {cache_file}")
-            data = torch.load(cache_file)
+            # Set weights_only=False to handle PyTorch 2.6 changes
+            data = torch.load(cache_file, weights_only=False)
             self.features = data["features"]
             self.labels = data["labels"]
             print(f"Loaded {len(self.labels)} positions from cache")
@@ -277,16 +287,16 @@ class SyzygyTablebaseDataset(Dataset):
 
 # Training function
 def train_tablebase_classifier(
-    model, train_loader, criterion, optimizer, num_epochs=500
+    model, train_loader, criterion, optimizer, num_epochs=500, accuracy_threshold=0.95
 ):
     # if cuda, use cuda
     if torch.cuda.is_available():
         device = torch.device("cuda")
         print("Using CUDA for GPU acceleration")
-    elif torch.backends.mps.is_available():
-        # Check if MPS (Metal Performance Shaders) is available for Mac Silicon GPU acceleration
-        device = torch.device("mps")
-        print("Using MPS (Metal Performance Shaders) for Mac Silicon GPU acceleration")
+    # elif torch.backends.mps.is_available():
+    #     # Check if MPS (Metal Performance Shaders) is available for Mac Silicon GPU acceleration
+    #     device = torch.device("mps")
+    #     print("Using MPS (Metal Performance Shaders) for Mac Silicon GPU acceleration")
     else:
         device = torch.device("cpu")
         print("MPS not available, falling back to CPU")
@@ -336,6 +346,11 @@ def train_tablebase_classifier(
             best_train_acc = epoch_train_acc
             torch.save(model.state_dict(), "best_tablebase_model.pth")
             print(f"Model saved with training accuracy: {best_train_acc:.4f}")
+            
+        # Early stopping condition: stop at 95% accuracy
+        if epoch_train_acc >= accuracy_threshold:
+            print(f"Reached {accuracy_threshold*100:.1f}% accuracy at epoch {epoch+1}. Early stopping.")
+            break
 
     return training_history
 
