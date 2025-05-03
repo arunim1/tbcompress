@@ -1,0 +1,304 @@
+Training started at: 2025-05-03 11:24:30.442289
+Tablebase directory: Syzygy345_WDL
+Output directory: models
+Number of .rtbw files: 145
+Model parameters: hidden_size=128, output_size=32
+Training parameters: batch_size=64, epochs=50, learning_rate=0.001
+Maximum parallel workers: 8
+
+[1/145] KNNvK: completed
+  Training time: 6.95 seconds
+[2/145] KRvK: completed
+  Training time: 9.18 seconds
+[3/145] KBPPvK: completed
+  Training time: 11.28 seconds
+[4/145] KQBvKN: completed
+  Training time: 15.04 seconds
+[5/145] KQQvKR: completed
+  Training time: 12.29 seconds
+[6/145] KQRRvK: completed
+  Training time: 11.29 seconds
+[7/145] KNNPvK: completed
+  Training time: 21.48 seconds
+[8/145] KBBvKQ: completed
+  Training time: 26.25 seconds
+[9/145] KRBvKR: completed
+  Training time: 28.91 seconds
+[10/145] KRBvK: completed
+  Training time: 10.64 seconds
+[11/145] KQBvKB: completed
+  Training time: 19.14 seconds
+[12/145] KRNvK: completed
+  Training time: 11.07 seconds
+[13/145] KQPvK: completed
+  Training time: 11.45 seconds
+[14/145] KQQBvK: completed
+  Training time: 11.79 seconds
+[15/145] KRRvKQ: completed
+  Training time: 47.72 seconds
+[16/145] KBNvKR: completed
+  Training time: 23.89 seconds
+[17/145] KBvKP: completed
+  Training time: 30.50 seconds
+[18/145] KQQNvK: completed
+  Training time: 11.72 seconds
+[19/145] KQRPvK: completed
+  Training time: 11.84 seconds
+[20/145] KRNvKQ: completed
+  Training time: 49.32 seconds
+[21/145] KQPvKR: completed
+  Training time: 23.55 seconds
+[22/145] KNPvKR: completed
+  Training time: 48.82 seconds
+[23/145] KQRvK: completed
+  Training time: 11.98 seconds
+[24/145] KRNvKP: completed
+  Training time: 22.89 seconds
+[25/145] KBNNvK: completed
+  Training time: 14.83 seconds
+[26/145] KQNPvK: completed
+  Training time: 11.41 seconds
+[27/145] KRBBvK: completed
+  Training time: 11.46 seconds
+[28/145] KPPvK: completed
+  Training time: 26.18 seconds
+[29/145] KRRvKP: completed
+  Training time: 16.15 seconds
+[30/145] KRPvKN: completed
+  Training time: 26.57 seconds
+[31/145] KRBNvK: completed
+  Training time: 11.81 seconds
+[32/145] KRvKR: completed
+  Training time: 45.24 seconds
+[33/145] KPPPvK: completed
+  Training time: 11.27 seconds
+[34/145] KQPPvK: completed
+  Training time: 11.84 seconds
+[35/145] KQQRvK: completed
+  Training time: 16.33 seconds
+[36/145] KPPvKR: completed
+  Training time: 69.91 seconds
+[37/145] KRPvKB: completed
+  Training time: 26.80 seconds
+[38/145] KQRvKR: completed
+  Training time: 20.35 seconds
+[39/145] KRRvKN: completed
+  Training time: 19.77 seconds
+[40/145] KRPvK: completed
+  Training time: 11.05 seconds
+[41/145] KQNvK: completed
+  Training time: 10.97 seconds
+[42/145] KQBvK: completed
+  Training time: 11.77 seconds
+[43/145] KRNvKB: completed
+  Training time: 27.52 seconds
+[44/145] KBBvKB: completed
+  Training time: 20.42 seconds
+[45/145] KQNvKR: completed
+  Training time: 28.30 seconds
+[46/145] KRRvKB: completed
+  Training time: 20.81 seconds
+[47/145] KPvK: completed
+  Training time: 72.33 seconds
+[48/145] KQBvKQ: completed
+  Training time: 52.00 seconds
+[49/145] KBBvKN: completed
+  Training time: 47.41 seconds
+[50/145] KQNNvK: completed
+  Training time: 11.49 seconds
+[51/145] KBBvKP: completed
+  Training time: 92.94 seconds
+[52/145] KNNNvK: completed
+  Training time: 25.93 seconds
+[53/145] KNPvK: completed
+  Training time: 34.52 seconds
+[54/145] KRNvKN: completed
+  Training time: 22.61 seconds
+[55/145] KNvK: completed
+  Training time: 9.30 seconds
+[56/145] KRPvKP: completed
+  Training time: 22.96 seconds
+[57/145] KBvKN: completed
+  Training time: 11.25 seconds
+[58/145] KRBPvK: completed
+  Training time: 11.26 seconds
+[59/145] KBvK: completed
+  Training time: 10.00 seconds
+[60/145] KQQPvK: completed
+  Training time: 12.11 seconds
+[61/145] KNNvKR: completed
+  Training time: 15.54 seconds
+[62/145] KQRNvK: completed
+  Training time: 11.79 seconds
+[63/145] KQRBvK: completed
+  Training time: 11.63 seconds
+[64/145] KBNPvK: completed
+  Training time: 12.62 seconds
+[65/145] KQBvKP: completed
+  Training time: 20.14 seconds
+[66/145] KBvKB: completed
+  Training time: 11.82 seconds
+[67/145] KNPPvK: completed
+  Training time: 11.89 seconds
+[68/145] KRPvKQ: completed
+  Training time: 45.80 seconds
+[69/145] KRRvK: completed
+  Training time: 11.51 seconds
+[70/145] KNvKN: completed
+  Training time: 12.01 seconds
+[71/145] KQQvK: completed
+  Training time: 11.96 seconds
+[72/145] KRNPvK: completed
+  Training time: 12.15 seconds
+[73/145] KQBBvK: completed
+  Training time: 12.00 seconds
+[74/145] KQvKR: completed
+  Training time: 22.90 seconds
+[75/145] KBPvKR: completed
+  Training time: 43.76 seconds
+[76/145] KQBNvK: completed
+  Training time: 11.03 seconds
+[77/145] KQRvKP: completed
+  Training time: 11.73 seconds
+[78/145] KRvKB: completed
+  Training time: 25.55 seconds
+[79/145] KQPvKB: completed
+  Training time: 15.75 seconds
+[80/145] KRRPvK: completed
+  Training time: 11.72 seconds
+[81/145] KBBPvK: completed
+  Training time: 15.82 seconds
+[82/145] KQNvKP: completed
+  Training time: 20.11 seconds
+[83/145] KQPvKN: completed
+  Training time: 16.78 seconds
+[84/145] KQvKQ: completed
+  Training time: 46.47 seconds
+[85/145] KRvKN: completed
+  Training time: 38.99 seconds
+[86/145] KNNvKQ: completed
+  Training time: 32.89 seconds
+[87/145] KPPvKB: completed
+  Training time: 59.10 seconds
+[88/145] KQvK: skipped
+[89/145] KRRRvK: completed
+  Training time: 13.96 seconds
+[90/145] KBPvKQ: completed
+  Training time: 36.05 seconds
+[91/145] KRPvKR: completed
+  Training time: 80.04 seconds
+[92/145] KBNvKN: completed
+  Training time: 37.16 seconds
+[93/145] KQQvKN: completed
+  Training time: 14.65 seconds
+[94/145] KRBvKB: completed
+  Training time: 32.73 seconds
+[95/145] KNNvKP: completed
+  Training time: 69.59 seconds
+[96/145] KPPvKN: completed
+  Training time: 82.03 seconds
+[97/145] KQNvKQ: completed
+  Training time: 57.55 seconds
+[98/145] KBPvKP: completed
+  Training time: 82.41 seconds
+[99/145] KQvKP: completed
+  Training time: 23.33 seconds
+[100/145] KBPvK: completed
+  Training time: 33.58 seconds
+[101/145] KRBvKN: completed
+  Training time: 28.03 seconds
+[102/145] KBNvKB: completed
+  Training time: 27.33 seconds
+[103/145] KNPvKN: completed
+  Training time: 73.71 seconds
+[104/145] KRRNvK: completed
+  Training time: 12.83 seconds
+[105/145] KQQvKB: completed
+  Training time: 13.20 seconds
+[106/145] KQBvKR: completed
+  Training time: 29.10 seconds
+[107/145] KNNvKB: completed
+  Training time: 14.12 seconds
+[108/145] KNPvKB: completed
+  Training time: 56.63 seconds
+[109/145] KBBNvK: completed
+  Training time: 18.30 seconds
+[110/145] KQRvKQ: completed
+  Training time: 51.50 seconds
+[111/145] KRRBvK: completed
+  Training time: 13.81 seconds
+[112/145] KQvKN: completed
+  Training time: 24.30 seconds
+[113/145] KRBvKP: completed
+  Training time: 27.69 seconds
+[114/145] KQvKB: completed
+  Training time: 22.33 seconds
+[115/145] KNNvKN: completed
+  Training time: 13.21 seconds
+[116/145] KBPvKB: completed
+  Training time: 45.91 seconds
+[117/145] KRNNvK: completed
+  Training time: 13.93 seconds
+[118/145] KPPvKQ: completed
+  Training time: 37.56 seconds
+[119/145] KBBBvK: completed
+  Training time: 48.96 seconds
+[120/145] KQBPvK: completed
+  Training time: 14.47 seconds
+[121/145] KQQvKP: completed
+  Training time: 14.10 seconds
+[122/145] KBPvKN: completed
+  Training time: 68.93 seconds
+[123/145] KBNvK: completed
+  Training time: 22.12 seconds
+[124/145] KQPvKQ: completed
+  Training time: 73.74 seconds
+[125/145] KBNvKP: completed
+  Training time: 55.35 seconds
+[126/145] KQQvKQ: completed
+  Training time: 32.94 seconds
+[127/145] KQQQvK: completed
+  Training time: 18.81 seconds
+[128/145] KQRvKB: completed
+  Training time: 18.31 seconds
+[129/145] KRNvKR: completed
+  Training time: 39.33 seconds
+[130/145] KRvKP: completed
+  Training time: 49.69 seconds
+[131/145] KQNvKN: completed
+  Training time: 22.21 seconds
+[132/145] KNPvKQ: completed
+  Training time: 36.82 seconds
+[133/145] KQPvKP: completed
+  Training time: 18.41 seconds
+[134/145] KBNvKQ: completed
+  Training time: 26.86 seconds
+[135/145] KBBvK: completed
+  Training time: 60.49 seconds
+[136/145] KRPPvK: completed
+  Training time: 13.17 seconds
+[137/145] KBBvKR: completed
+  Training time: 21.86 seconds
+[138/145] KQNvKB: skipped
+[139/145] KQRvKN: completed
+  Training time: 14.86 seconds
+[140/145] KRRvKR: completed
+  Training time: 26.29 seconds
+[141/145] KNPvKP: completed
+  Training time: 127.66 seconds
+[142/145] KPvKP: completed
+  Training time: 357.80 seconds
+[143/145] KNvKP: completed
+  Training time: 47.70 seconds
+[144/145] KRBvKQ: completed
+  Training time: 41.00 seconds
+[145/145] KPPvKP: completed
+  Training time: 122.70 seconds
+
+Training Summary:
+Total files: 145
+Completed: 143
+Failed: 0
+Skipped: 2
+
+Training completed at: 2025-05-03 11:34:50.760365
