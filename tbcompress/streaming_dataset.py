@@ -19,38 +19,28 @@ def board_to_feature_vector(board):
         board: A chess.Board object
 
     Returns:
-        numpy array with 65 features (64 squares + side to move)
+        numpy array with 769 features (12 * 64 one-hot piece planes + side to move)
     """
-    # Create a 64-element vector (one per square)
-    # Empty square: 0
-    # White pieces: 1 (pawn), 2 (knight), 3 (bishop), 4 (rook), 5 (queen), 6 (king)
-    # Black pieces: -1 (pawn), -2 (knight), -3 (bishop), -4 (rook), -5 (queen), -6 (king)
-    feature_vector = np.zeros(64, dtype=np.float32)
+    # 12 × 64 one-hot planes: 6 white piece types followed by 6 black
+    feature_vector = np.zeros(12 * 64, dtype=np.float32)
 
-    piece_values = {
-        chess.PAWN: 1,
-        chess.KNIGHT: 2,
-        chess.BISHOP: 3,
-        chess.ROOK: 4,
-        chess.QUEEN: 5,
-        chess.KING: 6,
-    }
-
-    # Sparse representation - only populate non-empty squares
+    # Populate planes
     for square in chess.SQUARES:
         piece = board.piece_at(square)
-        if piece is not None:
-            value = piece_values[piece.piece_type]
-            if piece.color == chess.BLACK:
-                value = -value
-            feature_vector[square] = value
+        if piece is None:
+            continue
 
-    # Side to move
-    side_to_move = 1.0 if board.turn == chess.WHITE else -1.0
+        # Plane index: 0-5 for white pieces, 6-11 for black
+        plane_idx = piece.piece_type - 1  # pawn=0 … king=5
+        if piece.color == chess.BLACK:
+            plane_idx += 6
 
-    # Combine features
-    combined_features = np.append(feature_vector, side_to_move)
-    return combined_features
+        feature_vector[plane_idx * 64 + square] = 1.0
+
+    # Side-to-move bit (1 if white to move else 0)
+    side_to_move = 1.0 if board.turn == chess.WHITE else 0.0
+
+    return np.append(feature_vector, side_to_move)
 
 
 class StreamingTablebaseDataset(Dataset):
@@ -93,12 +83,9 @@ class StreamingTablebaseDataset(Dataset):
         if self.piece_count <= 3:  # Simple endgames
             self.position_generator = self._exhaustively_enumerate_positions()
             self.estimated_size = 64 * 63 * 2  # Approximate for KvK and similar
-        elif self.piece_count <= 5:  # Moderate complexity
-            self.position_generator = self._systematic_enumeration()
-            self.estimated_size = 1000000  # Approximate for 4-5 piece endgames
         else:  # Complex endgames
-            self.position_generator = self._comprehensive_sampling()
-            self.estimated_size = 10000000  # Approximate for 6+ piece endgames
+            # TODO: Implement exhaustive enumeration for complex games, or generalize the current function.
+            pass
 
         # Cap the size based on max_positions if specified
         if self.max_positions is not None and self.estimated_size > self.max_positions:
@@ -342,117 +329,3 @@ class StreamingTablebaseDataset(Dataset):
 
                             if board.is_valid() and not board.is_check():
                                 yield board
-
-    def _systematic_enumeration(self):
-        """Systematically enumerate positions for moderate complexity material (4-5 pieces)"""
-        # Parse material string
-        if "v" not in self.material:
-            return
-
-        white_pieces, black_pieces = self.material.split("v")
-
-        # For more complex material, use a systematic sampling approach
-        while True:
-            # Create a board with the specified material
-            board = self._create_position_with_material()
-            if board is not None:
-                yield board
-
-    def _comprehensive_sampling(self):
-        """Generate a comprehensive sample of positions for complex material configurations"""
-        # For very complex endgames (6+ pieces), use random sampling with strategic biases
-        while True:
-            board = self._create_position_with_material()
-            if board is not None:
-                yield board
-
-    def _create_position_with_material(self):
-        """Create a legal position with the specified material configuration"""
-        # Parse material string
-        if "v" not in self.material:
-            return None
-
-        white_pieces, black_pieces = self.material.split("v")
-
-        # Create empty board
-        board = chess.Board(fen=None)
-        board.clear_board()
-
-        # Available squares
-        available_squares = list(chess.SQUARES)
-        random.shuffle(available_squares)
-
-        # Place white king
-        if "K" in white_pieces:
-            white_king_square = available_squares.pop()
-            board.set_piece_at(white_king_square, chess.Piece(chess.KING, chess.WHITE))
-            white_pieces = white_pieces.replace("K", "", 1)
-
-        # Place black king
-        if "K" in black_pieces:
-            # Kings must be at least 2 squares apart
-            valid_squares = [
-                sq
-                for sq in available_squares
-                if chess.square_distance(sq, white_king_square) > 1
-            ]
-            if not valid_squares:
-                return None
-
-            black_king_square = random.choice(valid_squares)
-            available_squares.remove(black_king_square)
-            board.set_piece_at(black_king_square, chess.Piece(chess.KING, chess.BLACK))
-            black_pieces = black_pieces.replace("K", "", 1)
-
-        # Map piece characters to piece types
-        piece_map = {
-            "Q": chess.QUEEN,
-            "R": chess.ROOK,
-            "B": chess.BISHOP,
-            "N": chess.KNIGHT,
-            "P": chess.PAWN,
-        }
-
-        # Place remaining white pieces
-        for char in white_pieces:
-            if char in piece_map and available_squares:
-                square = available_squares.pop()
-                # Pawns can't be on first or last rank
-                if piece_map[char] == chess.PAWN:
-                    valid_squares = [
-                        sq
-                        for sq in available_squares
-                        if chess.square_rank(sq) > 0 and chess.square_rank(sq) < 7
-                    ]
-                    if not valid_squares:
-                        return None
-                    square = random.choice(valid_squares)
-                    available_squares.remove(square)
-
-                board.set_piece_at(square, chess.Piece(piece_map[char], chess.WHITE))
-
-        # Place remaining black pieces
-        for char in black_pieces:
-            if char in piece_map and available_squares:
-                square = available_squares.pop()
-                # Pawns can't be on first or last rank
-                if piece_map[char] == chess.PAWN:
-                    valid_squares = [
-                        sq
-                        for sq in available_squares
-                        if chess.square_rank(sq) > 0 and chess.square_rank(sq) < 7
-                    ]
-                    if not valid_squares:
-                        return None
-                    square = random.choice(valid_squares)
-                    available_squares.remove(square)
-
-                board.set_piece_at(square, chess.Piece(piece_map[char], chess.BLACK))
-
-        # Random side to move
-        board.turn = random.choice([chess.WHITE, chess.BLACK])
-
-        # Check if position is legal
-        if board.is_valid() and not board.is_check():
-            return board
-        return None

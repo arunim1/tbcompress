@@ -1,12 +1,3 @@
-# /// script
-# dependencies = [
-#     "torch",
-#     "numpy",
-#     "python-chess",
-#     "tqdm",
-# ]
-# ///
-
 """
 Train a single tablebase model for a specific .rtbw file
 """
@@ -27,7 +18,9 @@ def main():
         )
         parser.add_argument("--rtbw-file", required=True, help="Path to .rtbw file")
         parser.add_argument(
-            "--tablebase-dir", required=True, help="Directory containing tablebase files"
+            "--tablebase-dir",
+            required=True,
+            help="Directory containing tablebase files",
         )
         parser.add_argument(
             "--output-dir", default="models", help="Directory to save trained models"
@@ -35,7 +28,9 @@ def main():
         parser.add_argument(
             "--hidden-size", type=int, default=128, help="Hidden layer size"
         )
-        parser.add_argument("--output-size", type=int, default=32, help="Output layer size")
+        parser.add_argument(
+            "--output-size", type=int, default=32, help="Output layer size"
+        )
         parser.add_argument(
             "--batch-size", type=int, default=64, help="Batch size for training"
         )
@@ -52,17 +47,19 @@ def main():
             help="Early stopping threshold (0.0-1.0)",
         )
         args = parser.parse_args()
-        
+
         # Validate inputs
         if not os.path.exists(args.rtbw_file):
             raise FileNotFoundError(f"RTBW file not found: {args.rtbw_file}")
-            
-        if not os.path.isfile(args.rtbw_file) or not args.rtbw_file.endswith('.rtbw'):
+
+        if not os.path.isfile(args.rtbw_file) or not args.rtbw_file.endswith(".rtbw"):
             raise ValueError(f"Invalid RTBW file: {args.rtbw_file}")
-            
+
         if not os.path.exists(args.tablebase_dir):
-            raise FileNotFoundError(f"Tablebase directory not found: {args.tablebase_dir}")
-            
+            raise FileNotFoundError(
+                f"Tablebase directory not found: {args.tablebase_dir}"
+            )
+
         if not os.path.isdir(args.tablebase_dir):
             raise NotADirectoryError(f"Not a directory: {args.tablebase_dir}")
 
@@ -72,7 +69,7 @@ def main():
 
         # Get model name from file name (without extension)
         model_name = os.path.basename(args.rtbw_file).split(".")[0]
-        
+
         print(f"Starting training for {model_name}...")
 
         # Create streaming dataset from the specific .rtbw file
@@ -80,27 +77,33 @@ def main():
             # Use streaming dataset to avoid loading all positions into memory
             # The cache_size parameter controls memory usage - increase/decrease as needed
             cache_size = 10000  # Smaller cache = less memory but more frequent refills
-            max_training_positions = 2000000  # Set a reasonable limit for the total positions to train on
-            
-            print(f"Creating streaming dataset for {args.rtbw_file} with cache size {cache_size}")
+            max_training_positions = (
+                2000000  # Set a reasonable limit for the total positions to train on
+            )
+
+            print(
+                f"Creating streaming dataset for {args.rtbw_file} with cache size {cache_size}"
+            )
             dataset = StreamingTablebaseDataset(
-                rtbw_file=args.rtbw_file, 
+                rtbw_file=args.rtbw_file,
                 tablebase_dir=args.tablebase_dir,
                 cache_size=cache_size,
-                max_positions=max_training_positions
+                max_positions=max_training_positions,
             )
-            
+
             # The dataset size is now an estimate based on material configuration
             print(f"Estimated dataset size: {len(dataset)} positions")
-            
+
         except Exception as e:
-            raise RuntimeError(f"Failed to create streaming dataset from {args.rtbw_file}: {str(e)}")
-            
+            raise RuntimeError(
+                f"Failed to create streaming dataset from {args.rtbw_file}: {str(e)}"
+            )
+
         # The streaming dataset will generate positions as needed, so we don't need to check size
 
         # Create model
         model = TablebaseModel(
-            input_size=65,  # 64 squares + side to move
+            input_size=769,  # 64 squares + side to move
             hidden_size=args.hidden_size,
             output_size=args.output_size,
             num_classes=3,  # Loss, Draw, Win
@@ -130,7 +133,7 @@ def main():
         print(f"Final Accuracy: {result['final_accuracy']:.4f}")
         print(f"Training Time: {result['training_time']:.2f} seconds")
         print(f"Model saved to: {result['model_path']}")
-        
+
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
         sys.exit(1)
