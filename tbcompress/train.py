@@ -6,6 +6,7 @@ import time
 from tqdm import tqdm
 import os
 import traceback
+import math
 
 
 def train_model(
@@ -14,7 +15,6 @@ def train_model(
     num_epochs=50,
     learning_rate=0.001,
     weight_decay=1e-5,
-    accuracy_threshold=0.95,
 ):
     """
     Train a tablebase model
@@ -25,12 +25,16 @@ def train_model(
         num_epochs: Maximum number of training epochs
         learning_rate: Initial learning rate
         weight_decay: L2 regularization parameter
-        accuracy_threshold: Early stopping threshold (0.0-1.0)
 
     Returns:
         Dict containing training history
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     model = model.to(device)
 
     # Loss function and optimizer
@@ -110,25 +114,17 @@ def train_model(
         if epoch_train_acc > best_train_acc:
             best_train_acc = epoch_train_acc
 
-        # Early stopping
-        if epoch_train_acc >= accuracy_threshold:
-            print(
-                f"Reached accuracy threshold of {accuracy_threshold*100:.1f}%. Early stopping."
-            )
-            break
-
     return history
 
 
 def train_with_streaming_dataset(
     model,
     train_dataset,
-    batch_size=64,
+    batch_size=512,
     num_training_steps=100000,  # Fixed number of training steps instead of epochs
     learning_rate=0.001,
     weight_decay=1e-5,
-    accuracy_threshold=0.95,
-    eval_interval=1000,  # How often to evaluate accuracy
+    eval_interval=20000,  # How often to evaluate accuracy
     verbose=True,
 ):
     """
@@ -141,14 +137,18 @@ def train_with_streaming_dataset(
         num_training_steps: Total number of training steps (batches)
         learning_rate: Initial learning rate
         weight_decay: L2 regularization strength
-        accuracy_threshold: Early stopping threshold (0.0-1.0)
         eval_interval: How often to evaluate accuracy (in training steps)
         verbose: Whether to print progress
 
     Returns:
         Dict containing training history
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     model = model.to(device)
 
     # Use a data loader with the streaming dataset
@@ -285,13 +285,6 @@ def train_with_streaming_dataset(
                 if period_acc > best_train_acc:
                     best_train_acc = period_acc
 
-                if period_acc >= accuracy_threshold:
-                    if verbose:
-                        print(
-                            f"Reached accuracy threshold of {accuracy_threshold*100:.1f}%. Early stopping."
-                        )
-                    break
-
                 # Reset running metrics
                 running_loss = 0.0
                 running_correct = 0
@@ -322,10 +315,9 @@ def train_and_save_model(
     train_dataset,
     output_path,
     model_name,
-    batch_size=64,
+    batch_size=512,
     num_epochs=50,
     learning_rate=0.001,
-    accuracy_threshold=0.95,
 ):
     """
     Train a model and save it to disk
@@ -338,7 +330,6 @@ def train_and_save_model(
         batch_size: Batch size for training
         num_epochs: Maximum training epochs
         learning_rate: Initial learning rate
-        accuracy_threshold: Early stopping threshold (0.0-1.0)
 
     Returns:
         Dict with training metrics and model path
@@ -358,9 +349,18 @@ def train_and_save_model(
     # Check if we're using a streaming dataset
     if hasattr(train_dataset, "cache_size") and hasattr(train_dataset, "_fill_cache"):
         # This is a streaming dataset, use steps-based training
-        # For compression, a large number of steps ensures good coverage
-        num_training_steps = 500000  # Aim for 500K steps for good compression
-        print(f"Using streaming dataset training with {num_training_steps} steps")
+        # Determine training steps: run for at least 500k steps **or** until the
+        # entire dataset has been processed twice – whichever is greater.
+        # "Entire" is based on the dataset's reported length, so we ceil-divide
+        # by the batch size to obtain the number of batches required to iterate
+        # through all positions once.
+        steps_cover_twice = math.ceil(2 * len(train_dataset) / batch_size)
+        num_training_steps = max(500_000 / batch_size, steps_cover_twice)
+
+        print(
+            "Using streaming dataset training for "
+            f"{num_training_steps} steps (cover-twice={steps_cover_twice})"
+        )
 
         history = train_with_streaming_dataset(
             model=model,
@@ -368,7 +368,6 @@ def train_and_save_model(
             batch_size=batch_size,
             num_training_steps=num_training_steps,
             learning_rate=learning_rate,
-            accuracy_threshold=accuracy_threshold,
         )
     else:
         # Regular dataset, use epoch-based training
@@ -382,7 +381,6 @@ def train_and_save_model(
             train_loader=train_loader,
             num_epochs=num_epochs,
             learning_rate=learning_rate,
-            accuracy_threshold=accuracy_threshold,
         )
 
     # End time

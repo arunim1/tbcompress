@@ -4,6 +4,7 @@ Streaming dataset implementation for Syzygy tablebase positions
 
 import os
 import random
+import itertools
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -80,16 +81,19 @@ class StreamingTablebaseDataset(Dataset):
         self.seen_positions = set()
 
         # Position generation strategy and estimate size
-        if self.piece_count <= 3:  # Simple endgames
-            self.position_generator = self._exhaustively_enumerate_positions()
-            self.estimated_size = 64 * 63 * 2  # Approximate for KvK and similar
-        else:  # Complex endgames
-            # TODO: Implement exhaustive enumeration for complex games, or generalize the current function.
-            pass
+        if self.piece_count <= 5:  # Up to five-piece TBs
+            # Use full exhaustive enumeration (lazy generator) regardless of
+            # combinatorial explosion. We only materialise one position at a
+            # time, so memory usage stays bounded.
+            self.position_generator = self._exhaustively_enumerate_positions_general()
 
-        # Cap the size based on max_positions if specified
-        if self.max_positions is not None and self.estimated_size > self.max_positions:
-            self.estimated_size = self.max_positions
+            # Provide a generous upper bound so training logic can compute
+            # epochs. Five-piece TBs contain < 500M positions.
+            self.estimated_size = int(5e8)
+        else:
+            raise ValueError(
+                "This dataset currently supports up to 5-piece tablebases."
+            )
 
         # Fill initial cache
         self._fill_cache()
@@ -190,12 +194,7 @@ class StreamingTablebaseDataset(Dataset):
             if not self.position_cache:
                 # Restart the generator for another epoch
                 print("Restarting position generator for a new epoch")
-                if self.piece_count <= 3:
-                    self.position_generator = self._exhaustively_enumerate_positions()
-                elif self.piece_count <= 5:
-                    self.position_generator = self._systematic_enumeration()
-                else:
-                    self.position_generator = self._comprehensive_sampling()
+                self.position_generator = self._exhaustively_enumerate_positions_general()
                 self._fill_cache()
 
                 # If still empty, we have a problem
@@ -211,121 +210,69 @@ class StreamingTablebaseDataset(Dataset):
             wdl, dtype=torch.long
         )
 
-    def _exhaustively_enumerate_positions(self):
-        """Exhaustively enumerate all legal positions for simple material configurations"""
-        # Parse material string
-        if "v" not in self.material:
-            return
+    def _exhaustively_enumerate_positions_general(self):
+        """Exhaustively enumerate **all** legal positions for up to 5 pieces.
 
-        white_pieces, black_pieces = self.material.split("v")
+        This is a lazy generator. It yields one position at a time so memory
+        usage remains low even for enormous state spaces.
+        """
+        # Parse material strings
+        white_str, black_str = self.material.split("v")
 
-        # Map piece characters to piece types
-        piece_map = {
-            "K": chess.KING,
+        # Build list of (piece_type, color) including BOTH kings first removed
+        white_list = [ch for ch in white_str if ch != "K"]
+        black_list = [ch for ch in black_str if ch != "K"]
+
+        remaining_pieces = [(chess.Piece({
             "Q": chess.QUEEN,
             "R": chess.ROOK,
             "B": chess.BISHOP,
             "N": chess.KNIGHT,
             "P": chess.PAWN,
-        }
+        }[p], chess.WHITE)) for p in white_list] + [
+            chess.Piece({
+                "Q": chess.QUEEN,
+                "R": chess.ROOK,
+                "B": chess.BISHOP,
+                "N": chess.KNIGHT,
+                "P": chess.PAWN,
+            }[p], chess.BLACK) for p in black_list
+        ]
 
-        # For very simple material configurations (KvK, KQvK, etc.)
-        # we can just iterate through all possible square combinations
-
-        # White king can be anywhere
-        for wk_square in chess.SQUARES:
-            # Black king must be at least 2 squares away
-            for bk_square in chess.SQUARES:
-                if chess.square_distance(wk_square, bk_square) <= 1:
+        # Precompute all square combinations for kings
+        for wk_sq in chess.SQUARES:
+            for bk_sq in chess.SQUARES:
+                if wk_sq == bk_sq or chess.square_distance(wk_sq, bk_sq) <= 1:
                     continue
 
-                # For each king placement, place the remaining pieces
-                # For example, in KQvK, we need to place the white queen
+                occupied = {wk_sq, bk_sq}
 
-                # Get squares that aren't occupied by kings
-                available_squares = [
-                    sq for sq in chess.SQUARES if sq != wk_square and sq != bk_square
-                ]
+                # Choose squares for the remaining pieces (combination order
+                # does not matter yet).
+                for squares in itertools.permutations(
+                    [s for s in chess.SQUARES if s not in occupied],
+                    len(remaining_pieces),
+                ):
+                    skip = False
+                    for sq, piece in zip(squares, remaining_pieces):
+                        if piece.piece_type == chess.PAWN and chess.square_rank(sq) in (0, 7):
+                            skip = True
+                            break
+                    if skip:
+                        continue
 
-                # Place remaining white pieces
-                remaining_white = white_pieces.replace("K", "", 1)  # Remove white king
-                remaining_black = black_pieces.replace("K", "", 1)  # Remove black king
+                    board = chess.Board(fen=None)
+                    board.clear_board()
+                    board.set_piece_at(wk_sq, chess.Piece(chess.KING, chess.WHITE))
+                    board.set_piece_at(bk_sq, chess.Piece(chess.KING, chess.BLACK))
 
-                # Handle remaining pieces based on material complexity
-                if not remaining_white and not remaining_black:
-                    # Just kings, try both sides to move
+                    for sq, piece in zip(squares, remaining_pieces):
+                        board.set_piece_at(sq, piece)
+
+                    if not board.is_valid():
+                        continue
+
+                    # Yield both sides to move
                     for turn in [chess.WHITE, chess.BLACK]:
-                        board = chess.Board(fen=None)
-                        board.clear_board()
-                        board.set_piece_at(
-                            wk_square, chess.Piece(chess.KING, chess.WHITE)
-                        )
-                        board.set_piece_at(
-                            bk_square, chess.Piece(chess.KING, chess.BLACK)
-                        )
                         board.turn = turn
-
-                        if board.is_valid() and not board.is_check():
-                            yield board
-
-                # Material with just one additional piece
-                elif len(remaining_white) == 1 and not remaining_black:
-                    piece_type = piece_map[remaining_white]
-
-                    # Try all squares for the piece
-                    for piece_square in available_squares:
-                        # Skip invalid pawn placements
-                        if piece_type == chess.PAWN and (
-                            chess.square_rank(piece_square) == 0
-                            or chess.square_rank(piece_square) == 7
-                        ):
-                            continue
-
-                        # Try both sides to move
-                        for turn in [chess.WHITE, chess.BLACK]:
-                            board = chess.Board(fen=None)
-                            board.clear_board()
-                            board.set_piece_at(
-                                wk_square, chess.Piece(chess.KING, chess.WHITE)
-                            )
-                            board.set_piece_at(
-                                bk_square, chess.Piece(chess.KING, chess.BLACK)
-                            )
-                            board.set_piece_at(
-                                piece_square, chess.Piece(piece_type, chess.WHITE)
-                            )
-                            board.turn = turn
-
-                            if board.is_valid() and not board.is_check():
-                                yield board
-
-                # Material with just one additional black piece
-                elif not remaining_white and len(remaining_black) == 1:
-                    piece_type = piece_map[remaining_black]
-
-                    # Try all squares for the piece
-                    for piece_square in available_squares:
-                        # Skip invalid pawn placements
-                        if piece_type == chess.PAWN and (
-                            chess.square_rank(piece_square) == 0
-                            or chess.square_rank(piece_square) == 7
-                        ):
-                            continue
-
-                        # Try both sides to move
-                        for turn in [chess.WHITE, chess.BLACK]:
-                            board = chess.Board(fen=None)
-                            board.clear_board()
-                            board.set_piece_at(
-                                wk_square, chess.Piece(chess.KING, chess.WHITE)
-                            )
-                            board.set_piece_at(
-                                bk_square, chess.Piece(chess.KING, chess.BLACK)
-                            )
-                            board.set_piece_at(
-                                piece_square, chess.Piece(piece_type, chess.BLACK)
-                            )
-                            board.turn = turn
-
-                            if board.is_valid() and not board.is_check():
-                                yield board
+                        yield board.copy()

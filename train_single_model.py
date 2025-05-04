@@ -32,19 +32,13 @@ def main():
             "--output-size", type=int, default=32, help="Output layer size"
         )
         parser.add_argument(
-            "--batch-size", type=int, default=64, help="Batch size for training"
+            "--batch-size", type=int, default=4096, help="Batch size for training"
         )
         parser.add_argument(
             "--epochs", type=int, default=50, help="Maximum number of training epochs"
         )
         parser.add_argument(
             "--learning-rate", type=float, default=0.001, help="Learning rate"
-        )
-        parser.add_argument(
-            "--accuracy-threshold",
-            type=float,
-            default=0.99,
-            help="Early stopping threshold (0.0-1.0)",
         )
         args = parser.parse_args()
 
@@ -76,9 +70,9 @@ def main():
         try:
             # Use streaming dataset to avoid loading all positions into memory
             # The cache_size parameter controls memory usage - increase/decrease as needed
-            cache_size = 10000  # Smaller cache = less memory but more frequent refills
+            cache_size = 50000  # Smaller cache = less memory but more frequent refills
             max_training_positions = (
-                2000000  # Set a reasonable limit for the total positions to train on
+                5e8  # Set an unreasonable limit for the total positions to train on
             )
 
             print(
@@ -118,7 +112,6 @@ def main():
             batch_size=args.batch_size,
             num_epochs=args.epochs,
             learning_rate=args.learning_rate,
-            accuracy_threshold=args.accuracy_threshold,
         )
 
         # Verify the model was saved
