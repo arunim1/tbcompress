@@ -1,12 +1,3 @@
-# /// script
-# dependencies = [
-#     "torch",
-#     "numpy",
-#     "python-chess",
-#     "tqdm",
-# ]
-# ///
-
 import torch
 import torch.nn as nn
 import torch.optim as optim

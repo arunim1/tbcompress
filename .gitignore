@@ -1,1 +1,7 @@
-Syzygy345_WDL
+Syzygy345_WDL/
+
+.venv/
+
+__pycache__/
+
+tmp/
