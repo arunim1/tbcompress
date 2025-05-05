@@ -25,8 +25,8 @@ def board_to_feature_vector(board):
     Returns:
         numpy array with 769 features (12 * 64 one-hot piece planes + side to move)
     """
-    # 12 × 64 one-hot planes: 6 white piece types followed by 6 black
-    feature_vector = np.zeros(12 * 64, dtype=np.float32)
+    # Pre-allocate the complete feature vector (768 piece features + 1 side to move)
+    feature_vector = np.zeros(769, dtype=np.float32)
 
     # Populate planes
     for square in chess.SQUARES:
@@ -42,9 +42,9 @@ def board_to_feature_vector(board):
         feature_vector[plane_idx * 64 + square] = 1.0
 
     # Side-to-move bit (1 if white to move else 0)
-    side_to_move = 1.0 if board.turn == chess.WHITE else 0.0
+    feature_vector[768] = 1.0 if board.turn == chess.WHITE else 0.0
 
-    return np.append(feature_vector, side_to_move)
+    return feature_vector
 
 
 class StreamingTablebaseDataset(Dataset):
@@ -118,69 +118,77 @@ class StreamingTablebaseDataset(Dataset):
 
     def _producer_loop(self):
         """Background thread that continuously fills the queue with positions"""
-        print(f"Starting position generator thread for {self.material}")
-
-        # Continue until stop event is set or max positions reached
-        while not self.stop_event.is_set():
-            # Check if we've reached max positions (if specified)
-            with self.positions_lock:
-                if (
-                    self.max_positions is not None
-                    and self.valid_positions >= self.max_positions
-                ):
-                    print(f"Reached max positions limit of {self.max_positions}")
-                    self.generator_exhausted.set()
-                    break
-
-            try:
-                # Get next position from generator
-                board = next(self.position_generator)
-
+        try:
+            print(f"Starting position generator thread for {self.material}")
+            
+            # Continue until stop event is set or max positions reached
+            while not self.stop_event.is_set():
+                # Check if we've reached max positions (if specified)
                 with self.positions_lock:
-                    self.positions_processed += 1
-
-                # Get WDL value from tablebase
+                    if (
+                        self.max_positions is not None
+                        and self.valid_positions >= self.max_positions
+                    ):
+                        print(f"Reached max positions limit of {self.max_positions}")
+                        self.generator_exhausted.set()
+                        break
+                
                 try:
-                    # Get the WDL value from the tablebase (win/draw/loss)
-                    # WDL values: 2 = win, 0 = draw, -2 = loss
-                    wdl = self.tablebase.probe_wdl(board)
-
-                    # For our model, convert to 0, 1, 2 for loss, draw, win
-                    # If side to move is black, need to negate wdl
-                    if not board.turn:
-                        wdl = -wdl
-
-                    # Map to 0 (loss), 1 (draw), 2 (win)
-                    wdl_mapped = (wdl + 2) // 2
-
-                    # Convert board to features
-                    features = board_to_feature_vector(board)
-
-                    # Add to queue - this will block if queue is full
-                    self.cache.put((features, wdl_mapped))
-
+                    # Get next position from generator
+                    board = next(self.position_generator)
+                    
                     with self.positions_lock:
-                        self.valid_positions += 1
-
-                except (ValueError, chess.syzygy.MissingTableError):
-                    # Skip positions not in the tablebase
+                        self.positions_processed += 1
+                    
+                    # Get WDL value from tablebase
+                    try:
+                        # Get the WDL value from the tablebase (win/draw/loss)
+                        # WDL values: 2 = win, 0 = draw, -2 = loss
+                        wdl = self.tablebase.probe_wdl(board)
+                        
+                        # For our model, convert to 0, 1, 2 for loss, draw, win
+                        # Map to 0 (loss), 1 (draw), 2 (win)
+                        if wdl < 0:  # Loss
+                            classification = 0
+                        elif wdl > 0:  # Win
+                            classification = 2
+                        else:  # Draw
+                            classification = 1
+                        
+                        # Convert board to features
+                        features = board_to_feature_vector(board)
+                        
+                        # Add to queue - this will block if queue is full
+                        self.cache.put((features, classification))
+                        
+                        with self.positions_lock:
+                            self.valid_positions += 1
+                            
+                    except (ValueError, chess.syzygy.MissingTableError):
+                        # Skip positions not in the tablebase
+                        continue
+                        
+                except StopIteration:
+                    # No more positions available from generator
+                    print("Position generator exhausted - restarting generator")
+                    # Restart the generator for another epoch
+                    self.position_generator = self._exhaustively_enumerate_positions_general()
                     continue
-
-            except StopIteration:
-                # No more positions available from generator
-                print("Position generator exhausted - restarting generator")
-                # Restart the generator for another epoch
-                self.position_generator = (
-                    self._exhaustively_enumerate_positions_general()
-                )
-                continue
-
-            except Exception as e:
-                print(f"Error processing position: {e}")
-                time.sleep(0.1)  # Brief pause to avoid tight loop on errors
-                continue
-
-        print(f"Position generator thread for {self.material} stopped")
+                    
+                except Exception as e:
+                    print(f"Error processing position: {e}")
+                    time.sleep(0.01)  # Brief pause to avoid tight loop on errors
+                    continue
+                    
+        except Exception as e:
+            # Log any errors but try to continue
+            print(f"Error in position generator thread: {str(e)}")
+            traceback.print_exc()
+            
+        finally:
+            # Signal that the generator is done
+            self.generator_exhausted.set()
+            print(f"Position generator thread for {self.material} stopped")
 
     def __len__(self):
         """Return estimated size of dataset"""
@@ -190,26 +198,30 @@ class StreamingTablebaseDataset(Dataset):
 
     def __getitem__(self, idx):
         """Get a position by index - pulls from the thread-safe queue"""
+        # For streaming datasets, the idx isn't used directly since we're pulling
+        # from the cache queue. But we still need to implement __getitem__
+        # according to the Dataset interface.
+        if self.stop_event.is_set():
+            raise IndexError("Dataset is shutting down")
+
+        # Get batches of items when possible to reduce queue contention
         try:
-            # Get item from queue - will block if queue is empty
-            # Timeout to periodically check if generator is exhausted
-            features, wdl = self.cache.get(timeout=10.0)
+            # Get next item from the queue with a timeout
+            # This avoids hanging indefinitely if the producer thread is dead
+            features, wdl = self.cache.get(block=True, timeout=2.0)  # Reduced timeout
+            self.cache.task_done()  # Mark task as done
+            
+            # Convert to tensors - feature vector and classification label
+            return torch.tensor(features, dtype=torch.float32), torch.tensor(wdl, dtype=torch.long)
 
-            # Immediately mark as done to allow producer to continue
-            self.cache.task_done()
-
-            return torch.tensor(features, dtype=torch.float32), torch.tensor(
-                wdl, dtype=torch.long
-            )
         except queue.Empty:
-            # Queue is empty and we've waited for timeout
             if self.generator_exhausted.is_set() and self.cache.empty():
                 # Generator is done and queue is empty - no more data
                 raise IndexError("No more positions available - dataset exhausted")
             else:
-                # Generator is still running but queue is temporarily empty
-                # Retry by recursively calling ourselves
-                print("Cache queue temporarily empty, waiting for more positions...")
+                # Short sleep to avoid CPU thrashing and reduce contention
+                time.sleep(0.001)
+                # Try again
                 return self.__getitem__(idx)
 
     def shutdown(self):

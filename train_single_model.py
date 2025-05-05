@@ -108,7 +108,6 @@ def main():
                 output_path=args.output_dir,
                 model_name=model_name,
                 batch_size=args.batch_size,
-                num_epochs=args.epochs,
                 learning_rate=args.learning_rate,
             )
 
