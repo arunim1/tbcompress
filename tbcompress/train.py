@@ -149,6 +149,7 @@ def train_with_streaming_dataset(
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
+    print(f"Using device: {device}")
     model = model.to(device)
 
     # Use a data loader with the streaming dataset
