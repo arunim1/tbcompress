@@ -9,119 +9,11 @@ import traceback
 import math
 
 
-def train_model(
-    model,
-    train_loader,
-    num_epochs=50,
-    learning_rate=0.001,
-    weight_decay=1e-5,
-):
-    """
-    Train a tablebase model
-
-    Args:
-        model: The model to train
-        train_loader: DataLoader for training data
-        num_epochs: Maximum number of training epochs
-        learning_rate: Initial learning rate
-        weight_decay: L2 regularization parameter
-
-    Returns:
-        Dict containing training history
-    """
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    model = model.to(device)
-
-    # Loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
-    )
-
-    # Learning rate scheduler - reduce LR when plateauing
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="max", factor=0.5, patience=5
-    )
-    print(f"Learning rate scheduler configured with patience={5}")
-
-    # For tracking best performance
-    best_train_acc = 0.0
-
-    # Training history
-    history = {"train_loss": [], "train_acc": [], "learning_rates": []}
-
-    # Main training loop
-    for epoch in range(num_epochs):
-        # Training phase
-        model.train()
-        train_loss = 0.0
-        correct = 0
-        total = 0
-
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
-        for inputs, targets in pbar:
-            inputs, targets = inputs.to(device), targets.to(device)
-
-            # Zero the gradients
-            optimizer.zero_grad()
-
-            # Forward pass
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-
-            # Backward pass and optimize
-            loss.backward()
-            optimizer.step()
-
-            # Record statistics
-            train_loss += loss.item() * inputs.size(0)
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-            # Update progress bar
-            pbar.set_postfix(
-                {"loss": train_loss / total, "acc": 100.0 * correct / total}
-            )
-
-        # Calculate epoch statistics
-        epoch_train_loss = train_loss / total
-        epoch_train_acc = correct / total
-
-        # Update learning rate
-        scheduler.step(epoch_train_acc)
-        current_lr = optimizer.param_groups[0]["lr"]
-
-        # Store in history
-        history["train_loss"].append(epoch_train_loss)
-        history["train_acc"].append(epoch_train_acc)
-        history["learning_rates"].append(current_lr)
-
-        # Print epoch summary
-        print(
-            f"Epoch {epoch+1}/{num_epochs}: "
-            + f"Train Loss: {epoch_train_loss:.4f}, "
-            + f"Train Acc: {epoch_train_acc:.4f}, "
-            + f"LR: {current_lr:.6f}"
-        )
-
-        # Save best model
-        if epoch_train_acc > best_train_acc:
-            best_train_acc = epoch_train_acc
-
-    return history
-
-
 def train_with_streaming_dataset(
     model,
     train_dataset,
     batch_size=512,
-    num_training_steps=100000,  # Fixed number of training steps instead of epochs
+    num_training_steps=500,  # Fixed number of training steps instead of epochs
     learning_rate=0.001,
     weight_decay=1e-5,
     eval_interval=20000,  # How often to evaluate accuracy
@@ -317,8 +209,8 @@ def train_and_save_model(
     output_path,
     model_name,
     batch_size=512,
-    num_epochs=2,
     learning_rate=0.001,
+    num_training_steps=500,
 ):
     """
     Train a model and save it to disk
@@ -329,7 +221,7 @@ def train_and_save_model(
         output_path: Directory where model will be saved
         model_name: Name for the saved model (without extension)
         batch_size: Batch size for training
-        num_epochs: Maximum training epochs
+        num_training_steps: Maximum training steps
         learning_rate: Initial learning rate
 
     Returns:
@@ -355,13 +247,8 @@ def train_and_save_model(
         # "Entire" is based on the dataset's reported length, so we ceil-divide
         # by the batch size to obtain the number of batches required to iterate
         # through all positions once.
-        steps_cover_twice = math.ceil(2 * len(train_dataset) / batch_size)
-        num_training_steps = max(500_000 / batch_size, steps_cover_twice)
 
-        print(
-            "Using streaming dataset training for "
-            f"{num_training_steps} steps (cover-twice={steps_cover_twice})"
-        )
+        print("Using streaming dataset training for " f"{num_training_steps} steps")
 
         history = train_with_streaming_dataset(
             model=model,
@@ -371,18 +258,7 @@ def train_and_save_model(
             learning_rate=learning_rate,
         )
     else:
-        # Regular dataset, use epoch-based training
-        print(f"Using epoch-based training with {num_epochs} epochs")
-
-        # Create data loader
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-        history = train_model(
-            model=model,
-            train_loader=train_loader,
-            num_epochs=num_epochs,
-            learning_rate=learning_rate,
-        )
+        raise ValueError("Unsupported dataset type")
 
     # End time
     training_time = time.time() - start_time
