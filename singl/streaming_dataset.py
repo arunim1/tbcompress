@@ -5,9 +5,6 @@ Streaming dataset implementation for Syzygy tablebase positions
 import os
 import random
 import itertools
-import threading
-import queue
-import time
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -73,17 +70,15 @@ class StreamingTablebaseDataset(Dataset):
         white_material, black_material = self.material.split("v")
         self.piece_count = len(white_material) + len(black_material)
 
-        # Thread-safe queue for position cache
-        self.cache = queue.Queue(maxsize=cache_size)
-
-        # Thread control
-        self.stop_event = threading.Event()
-        self.generator_exhausted = threading.Event()
+        # Position cache
+        self.position_cache = []
+        self.wdl_cache = []
+        self.cache_index = 0
 
         # Track counts for reporting
         self.positions_processed = 0
         self.valid_positions = 0
-        self.positions_lock = threading.Lock()  # For thread-safe counter updates
+        self.seen_positions = set()
 
         # Position generation strategy and estimate size
         if self.piece_count <= 5:  # Up to five-piece TBs
@@ -100,44 +95,34 @@ class StreamingTablebaseDataset(Dataset):
                 "This dataset currently supports up to 5-piece tablebases."
             )
 
-        # Start the background producer thread
-        self.producer_thread = threading.Thread(
-            target=self._producer_loop,
-            daemon=True,  # Make thread a daemon so it exits when the main thread exits
-            name="TB-Producer",
-        )
-        self.producer_thread.start()
-
-        # Wait for initial cache filling to ensure data is available immediately
-        while self.cache.empty() and not self.generator_exhausted.is_set():
-            time.sleep(0.1)  # Small wait to avoid busy waiting
+        # Fill initial cache
+        self._fill_cache()
 
         print(
             f"Initialized streaming dataset for {self.material} with estimated {self.estimated_size} positions"
         )
 
-    def _producer_loop(self):
-        """Background thread that continuously fills the queue with positions"""
-        print(f"Starting position generator thread for {self.material}")
+    def _fill_cache(self):
+        """Fill the position cache with valid positions"""
+        # Only bail out if we're refilling a partial cache
+        if len(self.position_cache) >= self.cache_size and self.cache_index > 0:
+            return
 
-        # Continue until stop event is set or max positions reached
-        while not self.stop_event.is_set():
-            # Check if we've reached max positions (if specified)
-            with self.positions_lock:
-                if (
-                    self.max_positions is not None
-                    and self.valid_positions >= self.max_positions
-                ):
-                    print(f"Reached max positions limit of {self.max_positions}")
-                    self.generator_exhausted.set()
-                    break
-
+        new_positions = []
+        new_wdl_values = []
+        while len(new_positions) < self.cache_size and (
+            self.max_positions is None or self.valid_positions < self.max_positions
+        ):
             try:
                 # Get next position from generator
                 board = next(self.position_generator)
+                self.positions_processed += 1
 
-                with self.positions_lock:
-                    self.positions_processed += 1
+                # Skip positions that we've already seen
+                board_hash = board.epd()
+                if board_hash in self.seen_positions:
+                    continue
+                self.seen_positions.add(board_hash)
 
                 # Get WDL value from tablebase
                 try:
@@ -153,14 +138,25 @@ class StreamingTablebaseDataset(Dataset):
                     # Map to 0 (loss), 1 (draw), 2 (win)
                     wdl_mapped = (wdl + 2) // 2
 
-                    # Convert board to features
+                    # Add to caches
                     features = board_to_feature_vector(board)
+                    new_positions.append(features)
+                    new_wdl_values.append(wdl_mapped)
+                    self.valid_positions += 1
 
-                    # Add to queue - this will block if queue is full
-                    self.cache.put((features, wdl_mapped))
+                    # Progress reporting
+                    if self.valid_positions % 10000 == 0 and self.valid_positions > 0:
+                        print(
+                            f"Generated {self.valid_positions} valid positions from {self.positions_processed} attempts"
+                        )
 
-                    with self.positions_lock:
-                        self.valid_positions += 1
+                    # Check if we've reached max positions
+                    if (
+                        self.max_positions is not None
+                        and self.valid_positions >= self.max_positions
+                    ):
+                        print(f"Reached max positions limit of {self.max_positions}")
+                        break
 
                 except (ValueError, chess.syzygy.MissingTableError):
                     # Skip positions not in the tablebase
@@ -168,19 +164,16 @@ class StreamingTablebaseDataset(Dataset):
 
             except StopIteration:
                 # No more positions available from generator
-                print("Position generator exhausted - restarting generator")
-                # Restart the generator for another epoch
-                self.position_generator = (
-                    self._exhaustively_enumerate_positions_general()
-                )
-                continue
+                print("No more positions available from generator")
+                break
 
             except Exception as e:
                 print(f"Error processing position: {e}")
-                time.sleep(0.1)  # Brief pause to avoid tight loop on errors
                 continue
 
-        print(f"Position generator thread for {self.material} stopped")
+        # Add new positions and WDL values to cache
+        self.position_cache.extend(new_positions)
+        self.wdl_cache.extend(new_wdl_values)
 
     def __len__(self):
         """Return estimated size of dataset"""
@@ -189,47 +182,36 @@ class StreamingTablebaseDataset(Dataset):
         return self.estimated_size
 
     def __getitem__(self, idx):
-        """Get a position by index - pulls from the thread-safe queue"""
-        try:
-            # Get item from queue - will block if queue is empty
-            # Timeout to periodically check if generator is exhausted
-            features, wdl = self.cache.get(timeout=10.0)
+        """Get a position by index - uses a continuously refilled cache"""
+        # If we're near the end of the cache, clear it and refill it
+        if self.cache_index >= len(self.position_cache) - 1:
+            self.cache_index = 0
+            # Clear the cache to get fresh positions
+            self.position_cache = []
+            self.wdl_cache = []
+            self._fill_cache()
 
-            # Immediately mark as done to allow producer to continue
-            self.cache.task_done()
+            # If cache is empty after filling, we've exhausted the generator
+            if not self.position_cache:
+                # Restart the generator for another epoch
+                print("Restarting position generator for a new epoch")
+                self.position_generator = (
+                    self._exhaustively_enumerate_positions_general()
+                )
+                self._fill_cache()
 
-            return torch.tensor(features, dtype=torch.float32), torch.tensor(
-                wdl, dtype=torch.long
-            )
-        except queue.Empty:
-            # Queue is empty and we've waited for timeout
-            if self.generator_exhausted.is_set() and self.cache.empty():
-                # Generator is done and queue is empty - no more data
-                raise IndexError("No more positions available - dataset exhausted")
-            else:
-                # Generator is still running but queue is temporarily empty
-                # Retry by recursively calling ourselves
-                print("Cache queue temporarily empty, waiting for more positions...")
-                return self.__getitem__(idx)
+                # If still empty, we have a problem
+                if not self.position_cache:
+                    raise IndexError("No valid positions could be generated")
 
-    def shutdown(self):
-        """Gracefully shut down the producer thread"""
-        print(f"Shutting down producer thread for {self.material}")
-        self.stop_event.set()
+        # Get the position from the cache
+        features = self.position_cache[self.cache_index]
+        wdl = self.wdl_cache[self.cache_index]
+        self.cache_index += 1
 
-        # Wait for the thread to finish (with timeout)
-        if self.producer_thread.is_alive():
-            self.producer_thread.join(timeout=5.0)
-
-        # Clear the queue to free memory
-        while not self.cache.empty():
-            try:
-                self.cache.get_nowait()
-                self.cache.task_done()
-            except queue.Empty:
-                break
-
-        print(f"Producer thread for {self.material} shut down")
+        return torch.tensor(features, dtype=torch.float32), torch.tensor(
+            wdl, dtype=torch.long
+        )
 
     def _exhaustively_enumerate_positions_general(self):
         """Exhaustively enumerate **all** legal positions for up to 5 pieces.

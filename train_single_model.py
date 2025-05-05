@@ -35,7 +35,7 @@ def main():
             "--batch-size", type=int, default=4096, help="Batch size for training"
         )
         parser.add_argument(
-            "--epochs", type=int, default=50, help="Maximum number of training epochs"
+            "--epochs", type=int, default=2, help="Maximum number of training epochs"
         )
         parser.add_argument(
             "--learning-rate", type=float, default=0.001, help="Learning rate"
@@ -85,9 +85,6 @@ def main():
                 max_positions=max_training_positions,
             )
 
-            # The dataset size is now an estimate based on material configuration
-            print(f"Estimated dataset size: {len(dataset)} positions")
-
         except Exception as e:
             raise RuntimeError(
                 f"Failed to create streaming dataset from {args.rtbw_file}: {str(e)}"
@@ -103,29 +100,35 @@ def main():
             num_classes=3,  # Loss, Draw, Win
         )
 
-        # Train and save model
-        result = train_and_save_model(
-            model=model,
-            train_dataset=dataset,
-            output_path=args.output_dir,
-            model_name=model_name,
-            batch_size=args.batch_size,
-            num_epochs=args.epochs,
-            learning_rate=args.learning_rate,
-        )
+        try:
+            # Train and save model
+            result = train_and_save_model(
+                model=model,
+                train_dataset=dataset,
+                output_path=args.output_dir,
+                model_name=model_name,
+                batch_size=args.batch_size,
+                num_epochs=args.epochs,
+                learning_rate=args.learning_rate,
+            )
 
-        # Verify the model was saved
-        model_path = os.path.join(args.output_dir, f"{model_name}.pth")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Expected model file not found: {model_path}")
+            # Verify the model was saved
+            model_path = os.path.join(args.output_dir, f"{model_name}.pth")
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Expected model file not found: {model_path}")
 
-        # Print summary
-        print("\nTraining Summary:")
-        print(f"Model: {result['model_name']}")
-        print(f"Parameters: {result['parameters']:,}")
-        print(f"Final Accuracy: {result['final_accuracy']:.4f}")
-        print(f"Training Time: {result['training_time']:.2f} seconds")
-        print(f"Model saved to: {result['model_path']}")
+            # Print summary
+            print("\nTraining Summary:")
+            print(f"Model: {result['model_name']}")
+            print(f"Parameters: {result['parameters']:,}")
+            print(f"Final Accuracy: {result['final_accuracy']:.4f}")
+            print(f"Training Time: {result['training_time']:.2f} seconds")
+            print(f"Model saved to: {result['model_path']}")
+        finally:
+            # Ensure the dataset's producer thread is properly shut down
+            if hasattr(dataset, "shutdown"):
+                print("Shutting down dataset producer thread...")
+                dataset.shutdown()
 
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")

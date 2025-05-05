@@ -317,7 +317,7 @@ def train_and_save_model(
     output_path,
     model_name,
     batch_size=512,
-    num_epochs=50,
+    num_epochs=2,
     learning_rate=0.001,
 ):
     """

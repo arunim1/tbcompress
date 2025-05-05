@@ -46,23 +46,32 @@ def evaluate_model_on_tablebase(
 
     correct = 0
     total = 0
-    with torch.no_grad():
-        running_accuracy = 0.0
-        for features, labels in tqdm(
-            loader, desc=f"Evaluating {os.path.basename(model_path)}", leave=False
-        ):
-            features, labels = features.to(device), labels.to(device)
-            outputs = model(features)
-            preds = outputs.argmax(dim=1)
-            batch_correct = (preds == labels).sum().item()
-            batch_total = labels.size(0)
-            batch_accuracy = batch_correct / batch_total
-            running_accuracy += batch_accuracy
-            correct += batch_correct
-            total += batch_total
-            tqdm.write(f"acc: {correct/total:.4f}")
-    avg_accuracy = running_accuracy / len(loader) if len(loader) > 0 else 0.0
-    return avg_accuracy, total
+    try:
+        with torch.no_grad():
+            running_accuracy = 0.0
+            tqdm_loader = tqdm(
+                loader, desc=f"Evaluating {os.path.basename(model_path)}", leave=False
+            )
+            for features, labels in tqdm_loader:
+                features, labels = features.to(device), labels.to(device)
+                outputs = model(features)
+                preds = outputs.argmax(dim=1)
+                batch_correct = (preds == labels).sum().item()
+                batch_total = labels.size(0)
+                batch_accuracy = batch_correct / batch_total
+                running_accuracy += batch_accuracy
+                correct += batch_correct
+                total += batch_total
+                tqdm_loader.set_postfix(acc=correct / total)
+            avg_accuracy = running_accuracy / len(loader) if len(loader) > 0 else 0.0
+        return avg_accuracy, total
+    finally:
+        # Ensure the dataset's producer thread is properly shut down
+        if hasattr(dataset, "shutdown"):
+            print(
+                f"Shutting down dataset producer thread for {os.path.basename(rtbw_path)}..."
+            )
+            dataset.shutdown()
 
 
 def main():
