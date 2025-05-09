@@ -4,6 +4,7 @@ import random
 import chess
 import chess.syzygy
 import json
+import numpy as np
 
 
 def generate_valid_5piece_boards(n):
@@ -48,55 +49,77 @@ def probe_positions(tb, boards):
         tb.probe_wdl(board)
 
 
-# %%
+# DO NOT EDIT BELOW THIS POINT
 
 
 def benchmark_random_positions(tablebase_dir, num_positions=10000):
-    stats = {}
-    tb = chess.syzygy.open_tablebase(tablebase_dir)
+    all_stats = []
+    for _ in range(3):
+        stats = {}
+        tb = chess.syzygy.open_tablebase(tablebase_dir)
 
-    print(f"Generating {num_positions} valid 5-piece boards")
-    start_time = time.perf_counter()
-    boards = generate_valid_5piece_boards(num_positions)
-    end_time = time.perf_counter()
-    print(
-        f"Generated {num_positions} valid 5-piece boards in {end_time - start_time:.3f} s"
-    )
-    # num boards / second
-    stats["boards_per_second"] = num_positions / (end_time - start_time)
-    print(f"{stats['boards_per_second']:.3f} boards/s")
+        print(f"Generating {num_positions} valid 5-piece boards")
+        start_time = time.perf_counter()
+        boards = generate_valid_5piece_boards(num_positions)
+        end_time = time.perf_counter()
+        print(
+            f"Generated {num_positions} valid 5-piece boards in {end_time - start_time:.3f} s"
+        )
+        # num boards / second
+        stats["boards_per_second"] = num_positions / (end_time - start_time)
+        print(f"{stats['boards_per_second']:.3f} boards/s")
 
-    # how much memory is used?
-    print(f"Memory used: {sys.getsizeof(boards) / 1e6:.3f} MB")
-    stats["memory_used"] = sys.getsizeof(boards) / 1e6
+        # how much memory is used?
+        print(f"Memory used: {sys.getsizeof(boards) / 1e6:.3f} MB")
+        stats["memory_used"] = sys.getsizeof(boards) / 1e6
 
-    # Benchmark loop
-    print(f"Benchmarking {num_positions} probes")
-    start_time = time.perf_counter()
-    probe_positions(tb, boards)
-    end_time = time.perf_counter()
+        # Benchmark loop
+        print(f"Benchmarking {num_positions} probes")
+        start_time = time.perf_counter()
+        probe_positions(tb, boards)
+        end_time = time.perf_counter()
 
-    total = end_time - start_time
-    avg_us = (total / num_positions) * 1e6
-    throughput = num_positions / total
+        total = end_time - start_time
+        avg_us = (total / num_positions) * 1e6
+        throughput = num_positions / total
 
-    stats["total_time"] = total
-    stats["avg_us"] = avg_us
-    stats["throughput"] = throughput
+        stats["total_time"] = total
+        stats["avg_us"] = avg_us
+        stats["throughput"] = throughput
 
-    print(f"Positions: {num_positions}")
-    print(f"Total time: {total:.3f} s")
-    print(f"Avg per probe: {avg_us:.2f} µs")
-    print(f"Throughput: {throughput:.0f} probes/sec")
+        print(f"Positions: {num_positions}")
+        print(f"Total time: {total:.3f} s")
+        print(f"Avg per probe: {avg_us:.2f} µs")
+        print(f"Throughput: {throughput:.0f} probes/sec")
+        all_stats.append(stats)
 
-    with open("stats.json", "w") as f:
-        json.dump(stats, f, indent=4)
+    # construct a baseline_stats_avg.json with averages and standard deviations
+    baseline_stats_avg = {
+        "boards_per_second": sum([s["boards_per_second"] for s in all_stats])
+        / len(all_stats),
+        "boards_per_second_std": np.std([s["boards_per_second"] for s in all_stats]),
+        "throughput": sum([s["throughput"] for s in all_stats]) / len(all_stats),
+        "throughput_std": np.std([s["throughput"] for s in all_stats]),
+    }
+
+    with open(f"stats_{num_positions}.json", "w") as f:
+        json.dump(baseline_stats_avg, f, indent=4)
 
 
 if __name__ == "__main__":
     import argparse
 
     p = argparse.ArgumentParser()
-    p.add_argument("tablebase_dir", help="Path to Syzygy WDL tablebase dir")
+    p.add_argument(
+        "positions",
+        type=int,
+        default=1000,
+        help="Number of positions to probe (default: 1000)",
+    )
+    p.add_argument(
+        "--tablebase_dir",
+        help="Path to Syzygy WDL tablebase dir",
+        default="Syzygy345_WDL",
+    )
     args = p.parse_args()
-    benchmark_random_positions(args.tablebase_dir, num_positions=100000)
+    benchmark_random_positions(args.tablebase_dir, num_positions=args.positions)

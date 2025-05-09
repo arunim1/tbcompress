@@ -1,0 +1,8 @@
+{
+    "boards_per_second": 58481.391466444016,
+    "boards_per_second_std": 2455.900733040522,
+    "memory_used": 0.800984,
+    "memory_used_std": 0.0,
+    "throughput": 9847.405332505483,
+    "throughput_std": 2444.100858675412
+}
