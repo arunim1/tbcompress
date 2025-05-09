@@ -1,0 +1,84 @@
+A game betwixt TestUser with ye White pieces and Computer with ye Black pieces.
+White Queens pawne two houſes.
+Black Queens pawne two houſes.
+White Knight to the Queens Biſhops third houſe.
+Black Knight to the Kings Biſhops ſixth houſe.
+White Biſhop to the Kings Biſhops fourth houſe.
+Black Knight to the Queens Biſhops ſixth houſe.
+White Kings pawne one houſe.
+Black Biſhop to the Kings Biſhops fifth houſe.
+White Kings Caſtle.
+Black Kings pawne one houſe.
+White Biſhop to the Queens Knights fifth houſe.
+Black Queens Rookes pawne one houſe.
+White Biſhop to the Queens Rookes fourth houſe.
+Black Queens Knights pawne two houſes.
+White Biſhop to the Queens Knights third houſe.
+Black Queens Rookes pawne one houſe.
+White Knight takes Black pawne.
+Black Queens Rookes pawne one houſe.
+White Knight takes Black pawne.
+Black Queens Rookes pawne takes White Biſhop to the Queens Knights third houſe.
+White Knight takes Black Queen.
+Black Queens Knights pawne takes White pawne to the Queens Rookes ſecond houſe gives Checke.
+White King right one houſe.
+Black Biſhop to the Queens Knights fourth houſe.
+White Queen up one houſe.
+Black Knight takes White pawne.
+White Queen to the Queens Knights fifth houſe.
+Black Knight takes White pawne gives Checke.
+White Rooke takes Black Knight.
+Black Biſhop takes White Rooke.
+White Knight to the Queens Biſhops ſeventh houſe.
+— Beale, The Royall Game of Cheſſe-Play
+
+A game betwixt TestUser with ye White pieces and Computer with ye Black pieces.
+White Queens pawne two houſes.
+Black Queens pawne two houſes.
+White Knight to the Queens Biſhops third houſe.
+Black Knight to the Kings Biſhops ſixth houſe.
+White Biſhop to the Kings Knights fifth houſe.
+Black Kings Rookes pawne one houſe.
+White Biſhop to the Kings Rookes fourth houſe.
+Black Knight to the Queens Biſhops ſixth houſe.
+White Kings Caſtle.
+Black Biſhop to the Queens ſeventh houſe.
+White Rooke left one houſe.
+Black Kings Knights pawne two houſes.
+White Biſhop to the Kings Knights third houſe.
+Black Kings pawne one houſe.
+White Kings Biſhops pawne one houſe.
+Black Kings Caſtle.
+White Queens Rookes pawne one houſe.
+Black Knight to the Kings Knights eighth houſe.
+White Kings pawne two houſes.
+Black Knight to the Kings ſeventh houſe.
+White Kings Biſhops pawne one houſe.
+Black Kings Biſhops pawne one houſe.
+White Kings Biſhops pawne takes Black pawne to the Kings Knights fifth houſe.
+Black Kings Rookes pawne takes White pawne to the Kings Knights fifth houſe.
+White Knight to the Kings Biſhops third houſe.
+Black Biſhop to the Kings Knights ſeventh houſe.
+White Biſhop to the Queens Knights fifth houſe.
+Black Kings Knights pawne one houſe.
+White Knight to the Kings Knights firſt houſe.
+Black Queens Rookes pawne one houſe.
+White Biſhop to the Queens Rookes fourth houſe.
+Black Kings Biſhops pawne one houſe.
+White Kings pawne takes Black pawne to the Queens fifth houſe.
+Black Knight takes White pawne.
+White Biſhop takes Black Biſhop.
+Black Queen takes White Biſhop.
+White Queens pawne takes Black pawne to the Kings ſixth houſe.
+Black Queen to the Queens Biſhops ſixth houſe.
+White Knight to the Kings ſecond houſe.
+Black Knight takes White Knight.
+White Queen takes Black Knight.
+Black Rooke left one houſe.
+White Rooke takes Black Rooke gives Checke.
+Black Rooke takes White Rooke.
+White Rooke right two houſes.
+Black Queen right one houſe.
+White Queen up one houſe.
+Black Queen takes White Queen.
+— Beale, The Royall Game of Cheſſe-Play
