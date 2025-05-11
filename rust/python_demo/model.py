@@ -17,3 +17,16 @@ class SmallCNN(nn.Module):
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return torch.tanh(self.out(x))  # outputs ∈ (-1,1)
+
+
+class FFN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(769, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 3)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)

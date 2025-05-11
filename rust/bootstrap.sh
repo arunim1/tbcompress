@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# echo "▶ creating uv venv"
-# uv venv --python=3.12
+echo "▶ creating uv venv"
+uv venv --python=3.12
 source .venv/bin/activate
 
 echo "▶ installing Rust (stable) & maturin"
