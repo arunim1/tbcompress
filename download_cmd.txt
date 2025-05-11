@@ -1,1 +1,0 @@
-wget -e robots=off -r -np -l1 -nH --cut-dirs=3 -A '.rtbw' https://tablebase.lichess.ovh/tables/standard/3-4-5-wdl/

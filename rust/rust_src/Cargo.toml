@@ -1,0 +1,30 @@
+[package]
+name = "tb_stream"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "tb_stream"
+crate-type = ["cdylib"]
+
+[dependencies]
+crossbeam-channel = "0.5"
+serde = { version = "1", features = ["derive"] }
+rand = { version = "0.8", features = ["small_rng"] }   # gives SmallRng
+shakmaty = "0.27"                                      # modern API
+shakmaty-syzygy = { version = "0.25.3", features = ["mmap"] }
+
+
+# PyO3 bindings
+pyo3 = { version = "0.20", features = ["extension-module"] }
+numpy = "0.20"
+
+[features]
+# no crate-local features required
+default = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
