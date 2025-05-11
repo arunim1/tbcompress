@@ -5,6 +5,7 @@ import chess
 import chess.syzygy
 import json
 import numpy as np
+import torch
 
 
 def generate_valid_5piece_boards(n):
@@ -44,9 +45,39 @@ def generate_valid_5piece_boards(n):
     return boards
 
 
+def board_to_tensor(board):
+    # convert a chess.Board to a torch tensor of shape (769,)
+    feature_vector = torch.zeros(769, dtype=torch.uint8)
+
+    # Populate planes
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece is None:
+            continue
+
+        # Plane index: 0-5 for white pieces, 6-11 for black
+        plane_idx = piece.piece_type - 1  # pawn=0 … king=5
+        if piece.color == chess.BLACK:
+            plane_idx += 6
+
+        feature_vector[plane_idx * 64 + square] = 1
+
+    # Side-to-move bit (1 if white to move else 0)
+    feature_vector[768] = 1 if board.turn == chess.WHITE else 0
+
+    return feature_vector
+
+
 def probe_positions(tb, boards):
-    for board in boards:
-        tb.probe_wdl(board)
+    # save a torch tensor of inputs (769-vector capturing the board state) and outputs (-2, 0, 2)
+    inputs = torch.zeros((len(boards), 769), dtype=torch.uint8)
+    outputs = torch.zeros(len(boards), dtype=torch.int8)
+    for i, board in enumerate(boards):
+        inputs[i] = board_to_tensor(board)
+        out = tb.probe_wdl(board)
+        # out is -2, 0, 2
+        outputs[i] = out
+    return inputs, outputs
 
 
 # DO NOT EDIT BELOW THIS POINT
@@ -56,7 +87,7 @@ def benchmark_random_positions(tablebase_dir, num_positions=10000):
     all_stats = []
     for _ in range(3):
         stats = {}
-        tb = chess.syzygy.open_tablebase(tablebase_dir)
+        tb = chess.syzygy.open_tablebase(tablebase_dir, max_fds=1024)
 
         print(f"Generating {num_positions} valid 5-piece boards")
         start_time = time.perf_counter()
@@ -76,8 +107,12 @@ def benchmark_random_positions(tablebase_dir, num_positions=10000):
         # Benchmark loop
         print(f"Benchmarking {num_positions} probes")
         start_time = time.perf_counter()
-        probe_positions(tb, boards)
+        inputs, outputs = probe_positions(tb, boards)
         end_time = time.perf_counter()
+
+        # save
+        torch.save(inputs, "inputs.pt")
+        torch.save(outputs, "outputs.pt")
 
         total = end_time - start_time
         avg_us = (total / num_positions) * 1e6
@@ -102,7 +137,7 @@ def benchmark_random_positions(tablebase_dir, num_positions=10000):
         "throughput_std": np.std([s["throughput"] for s in all_stats]),
     }
 
-    with open(f"stats_{num_positions}.json", "w") as f:
+    with open(f"new_stats_{num_positions}1.json", "w") as f:
         json.dump(baseline_stats_avg, f, indent=4)
 
 
