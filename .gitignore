@@ -5,3 +5,5 @@ Syzygy345_WDL/
 __pycache__/
 
 tmp/
+
+rust/
