@@ -4,13 +4,13 @@ sudo apt-get update
 sudo apt-get install -y build-essential clang pkg-config python3-dev libssl-dev 
 
 
-curl -LsSf https://astral.sh/uv/
-source "\$HOME/.local/bin/env"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
 
 echo "▶ installing Rust (stable) & maturin"
 if ! command -v rustup >/dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  . "\$HOME/.cargo/env"
+  . "$HOME/.cargo/env"
 fi
 
 git switch rusty
